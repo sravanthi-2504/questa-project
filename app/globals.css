@@ -332,3 +332,65 @@
         transform: translateY(0);
     }
 }
+
+@keyframes talking {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.08);
+        opacity: 0.9;
+    }
+}
+
+.animate-talking {
+    animation: talking 0.8s ease-in-out infinite;
+}
+
+/* Smooth talking animation */
+@keyframes talking-gentle {
+    0%, 100% {
+        transform: scale(1) translateY(0px);
+        box-shadow: 0 0 0px rgba(34, 197, 94, 0);
+    }
+    50% {
+        transform: scale(1.03) translateY(-2px);
+        box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+    }
+}
+
+@keyframes talking-wave-1 {
+    0%, 100% {
+        opacity: 0.5;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.1);
+    }
+}
+
+@keyframes talking-wave-2 {
+    0%, 100% {
+        opacity: 0.3;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(1.15);
+    }
+}
+
+.animate-talking-gentle {
+    animation: talking-gentle 1.5s ease-in-out infinite;
+}
+
+.animate-talking-wave-1 {
+    animation: talking-wave-1 2s ease-in-out infinite;
+}
+
+.animate-talking-wave-2 {
+    animation: talking-wave-2 2.5s ease-in-out infinite;
+    animation-delay: 0.5s;
+}
