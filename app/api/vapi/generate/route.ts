@@ -1,13 +1,39 @@
+"use server";
+
+export const runtime = "edge";
+
 import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
-
 import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
 
+
+
 export async function POST(request: Request) {
-    const { type, role, level, techstack, amount, userid } = await request.json();
+    console.log("🚀 VAPI POST ENDPOINT CALLED");
 
     try {
+        // Parse the request body
+        const body = await request.json();
+        console.log("📦 Request body:", JSON.stringify(body));
+
+        // Vapi sends data in { user_input, parameters } format
+        const { user_input, parameters } = body;
+
+        // Extract parameters from Vapi's format
+        const {
+            type = "technical",
+            role = "software engineer",
+            level = "mid-level",
+            techstack = "JavaScript, React, Node.js",
+            amount = "5",
+            userid = "vapi-user"
+        } = parameters || {};
+
+        console.log("🎯 Extracted parameters:", { type, role, level, techstack, amount, userid });
+
+        // Generate questions
+        console.log("🤖 Calling Gemini AI...");
         const { text: questions } = await generateText({
             model: google("gemini-2.0-flash-001"),
             prompt: `Prepare questions for a job interview.
@@ -25,6 +51,10 @@ export async function POST(request: Request) {
     `,
         });
 
+        console.log("✅ Questions generated:", questions);
+
+        // Save to Firebase
+        console.log("🔥 Saving to Firebase...");
         const interview = {
             role: role,
             type: type,
@@ -38,14 +68,27 @@ export async function POST(request: Request) {
         };
 
         await db.collection("interviews").add(interview);
+        console.log("💾 Saved to Firebase successfully");
 
-        return Response.json({ success: true }, { status: 200 });
+        // Return Vapi-compatible response
+        return Response.json({
+            success: true,
+            result: `I've generated ${amount} interview questions for ${role} role and saved them to your interviews.`
+        }, { status: 200 });
+
     } catch (error) {
-        console.error("Error:", error);
-        return Response.json({ success: false, error: error }, { status: 500 });
+        console.error("❌ ERROR:", error);
+        return Response.json({
+            success: false,
+            error: error.message
+        }, { status: 500 });
     }
 }
 
 export async function GET() {
-    return Response.json({ success: true, data: "Thank you!" }, { status: 200 });
+    console.log("✅ GET endpoint called");
+    return Response.json({
+        success: true,
+        data: "Thank you!"
+    }, { status: 200 });
 }
