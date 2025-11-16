@@ -1,13 +1,10 @@
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
 
 import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
 import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
-
-
 
 export async function POST(request: Request) {
     console.log("🚀 VAPI POST ENDPOINT CALLED");
