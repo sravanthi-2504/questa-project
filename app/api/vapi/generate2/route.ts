@@ -1,42 +1,66 @@
-import { NextRequest } from "next/server";
-import { generateText } from "ai";
-import { google } from "@ai-sdk/google";
-import { db } from "@/firebase/admin";
-import { getRandomInterviewCover } from "@/lib/utils";
-
-export const runtime = "nodejs";
+export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
-// CORS headers
-export const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+// Simple CORS headers
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-// Handle OPTIONS (CORS preflight)
-export async function OPTIONS() {
-    return new Response(null, { status: 200, headers: corsHeaders });
+export async function GET(request: Request) {
+    console.log("🔍 GET request received");
+
+    const response = {
+        status: "active",
+        service: "Interview Question Generator API",
+        timestamp: new Date().toISOString(),
+        version: "1.0.0",
+        endpoints: {
+            POST: "/api/vapi/generate2 - Generate interview questions"
+        }
+    };
+
+    return new Response(
+        JSON.stringify(response, null, 2),
+        {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                ...corsHeaders
+            }
+        }
+    );
 }
 
-// Helper to extract valid JSON array from Gemini output
-function extractJsonArray(text: string): string {
-    const match = text.match(/\[[\s\S]*\]/);
-    if (!match) {
-        throw new Error("No valid JSON array found in AI response.");
-    }
-    return match[0];
-}
+export async function POST(request: Request) {
+    console.log("🚀 POST request received");
 
-// Main POST handler (CORS + AI + Firebase)
-export async function POST(req: NextRequest) {
     try {
-        console.log("🚀 VAPI POST ENDPOINT CALLED");
+        // Parse the request body
+        let body;
+        try {
+            body = await request.json();
+            console.log("📦 Request body:", JSON.stringify(body, null, 2));
+        } catch (parseError) {
+            console.error("❌ JSON parse error:", parseError);
+            return new Response(
+                JSON.stringify({
+                    error: "Invalid JSON in request body"
+                }),
+                {
+                    status: 400,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...corsHeaders
+                    }
+                }
+            );
+        }
 
-        const body = await req.json();
-        console.log("📦 Incoming Body:", JSON.stringify(body));
+        // Extract parameters (with VAPI compatibility)
+        const params = body.parameters || body;
 
-        // Extract parameters
         const {
             role = "software engineer",
             level = "mid-level",
@@ -44,85 +68,80 @@ export async function POST(req: NextRequest) {
             amount = "5",
             userid = "vapi-user",
             type = "technical",
-        } = body;
+        } = params;
 
-        console.log("🎯 Extracted Params:", {
-            role,
-            level,
-            techstack,
-            amount,
-            userid,
-            type,
-        });
+        console.log("🎯 Parameters:", { role, level, techstack, amount, userid, type });
 
-        // Generate questions with Gemini
-        console.log("🤖 Calling Gemini...");
-        const { text: questions } = await generateText({
-            model: google("gemini-2.0-flash-001"),
-            prompt: `
-                Prepare questions for a job interview.
-                Role: ${role}
-                Level: ${level}
-                Tech stack: ${techstack}
-                Focus: ${type}
-                Count: ${amount}
-                Return ONLY a JSON array like ["Q1","Q2","Q3"]
-            `,
-        });
+        // Generate sample questions
+        const questionCount = parseInt(amount) || 5;
+        const sampleQuestions = [
+            `What specific experience do you have with ${techstack} as a ${role}?`,
+            `How do you approach ${type} problem-solving as a ${level} ${role}?`,
+            `Describe a challenging project where you used ${techstack.split(',')[0]?.trim()}.`,
+            `What ${type} methodologies do you follow in your ${role} work?`,
+            `How do you stay updated with the latest ${techstack} technologies?`,
+            `What's your experience with testing in ${techstack} environments?`,
+            `How do you handle code reviews and technical feedback?`,
+            `Describe your approach to debugging complex issues in ${techstack}.`
+        ].slice(0, questionCount);
 
-        console.log("📘 Raw Gemini Output:", questions);
+        // VAPI-compatible response
+        const response = {
+            result: {
+                success: true,
+                message: `Generated ${sampleQuestions.length} ${type} questions for ${level} ${role}`,
+                questions: sampleQuestions,
+                metadata: {
+                    role,
+                    level,
+                    techstack: techstack.split(',').map((tech: string) => tech.trim()),
+                    type,
+                    amount: sampleQuestions.length,
+                    userId: userid,
+                    generatedAt: new Date().toISOString(),
+                    // Note: Firebase saving disabled for deployment
+                    savedToDatabase: false
+                }
+            }
+        };
 
-        // Extract and clean JSON array
-        const clean = extractJsonArray(questions);
-        console.log("🧼 Clean JSON:", clean);
+        console.log("📤 Sending response:", JSON.stringify(response, null, 2));
 
-        const parsedQuestions = JSON.parse(clean);
-
-        // Save to Firebase
-        console.log("🔥 Saving to Firebase...");
-        await db.collection("interviews").add({
-            role,
-            type,
-            level,
-            techstack: techstack.split(",").map((s: string) => s.trim()),
-            questions: parsedQuestions,
-            userId: userid,
-            finalized: true,
-            coverImage: getRandomInterviewCover(),
-            createdAt: new Date().toISOString(),
-        });
-
-        console.log("💾 Saved!");
-
-        // VAPI REQUIRED FORMAT
         return new Response(
-            JSON.stringify({
-                result: {
-                    message: `Generated ${amount} interview questions for ${role}`,
-                    questions: parsedQuestions,
-                },
-            }),
-            { status: 200, headers: corsHeaders }
+            JSON.stringify(response, null, 2),
+            {
+                status: 200,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...corsHeaders
+                }
+            }
         );
-    } catch (err: any) {
-        console.error("❌ SERVER ERROR:", err);
+
+    } catch (error: any) {
+        console.error("❌ Server error:", error);
 
         return new Response(
             JSON.stringify({
-                error: err?.message ?? "Unknown server error",
+                error: error?.message || "Internal server error"
             }),
-            { status: 500, headers: corsHeaders }
+            {
+                status: 500,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...corsHeaders
+                }
+            }
         );
     }
 }
 
-// Simple GET check
-export async function GET() {
-    return new Response(
-        JSON.stringify({
-            success: true,
-            data: "Thank you!",
-        }),
-        { status: 200, headers: corsHeaders }
-    );
+// Handle CORS preflight requests
+export async function OPTIONS(request: Request) {
+    console.log("🛠️ OPTIONS request received");
+
+    return new Response(null, {
+        status: 200,
+        headers: corsHeaders
+    });
 }
