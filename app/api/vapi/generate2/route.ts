@@ -1,10 +1,23 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
+import { NextRequest } from "next/server";
 import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
 import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// CORS headers
+export const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+// Handle OPTIONS (CORS preflight)
+export async function OPTIONS() {
+    return new Response(null, { status: 200, headers: corsHeaders });
+}
 
 // Helper to extract valid JSON array from Gemini output
 function extractJsonArray(text: string): string {
@@ -15,11 +28,12 @@ function extractJsonArray(text: string): string {
     return match[0];
 }
 
-export async function POST(request: Request) {
-    console.log("🚀 VAPI POST ENDPOINT CALLED");
-
+// Main POST handler (CORS + AI + Firebase)
+export async function POST(req: NextRequest) {
     try {
-        const body = await request.json();
+        console.log("🚀 VAPI POST ENDPOINT CALLED");
+
+        const body = await req.json();
         console.log("📦 Incoming Body:", JSON.stringify(body));
 
         // Extract parameters
@@ -81,27 +95,34 @@ export async function POST(request: Request) {
         console.log("💾 Saved!");
 
         // VAPI REQUIRED FORMAT
-        return Response.json({
-            result: {
-                message: `Generated ${amount} interview questions for ${role}`,
-                questions: parsedQuestions
-            }
-        });
+        return new Response(
+            JSON.stringify({
+                result: {
+                    message: `Generated ${amount} interview questions for ${role}`,
+                    questions: parsedQuestions,
+                },
+            }),
+            { status: 200, headers: corsHeaders }
+        );
     } catch (err: any) {
         console.error("❌ SERVER ERROR:", err);
 
-        return Response.json(
-            {
+        return new Response(
+            JSON.stringify({
                 error: err?.message ?? "Unknown server error",
-            },
-            { status: 500 }
+            }),
+            { status: 500, headers: corsHeaders }
         );
     }
 }
 
+// Simple GET check
 export async function GET() {
-    return Response.json({
-        success: true,
-        data: "Thank you!",
-    });
+    return new Response(
+        JSON.stringify({
+            success: true,
+            data: "Thank you!",
+        }),
+        { status: 200, headers: corsHeaders }
+    );
 }
