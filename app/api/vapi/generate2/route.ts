@@ -1,6 +1,3 @@
-// redeploy test
-// force vercel deploy
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -13,14 +10,19 @@ export async function POST(request: Request) {
     console.log("🚀 VAPI POST ENDPOINT CALLED");
 
     try {
-        // Parse the request body
         const body = await request.json();
-        console.log("📦 Request body:", JSON.stringify(body));
+        console.log("📦 Incoming RAW Body:", JSON.stringify(body));
 
-        // Vapi sends data in { user_input, parameters } format
-        const { user_input, parameters } = body;
+        // ⭐ NEW VAPI TOOL FORMAT ⭐
+        const { toolName, arguments: args } = body;
 
-        // Extract parameters from Vapi's format
+        console.log("🔧 Tool name:", toolName);
+        console.log("🧩 Tool arguments:", args);
+
+        if (!args) {
+            throw new Error("Missing tool arguments");
+        }
+
         const {
             type = "technical",
             role = "software engineer",
@@ -28,38 +30,34 @@ export async function POST(request: Request) {
             techstack = "JavaScript, React, Node.js",
             amount = "5",
             userid = "vapi-user"
-        } = parameters || {};
+        } = args;
 
         console.log("🎯 Extracted parameters:", { type, role, level, techstack, amount, userid });
 
-        // Generate questions
-        console.log("🤖 Calling Gemini AI...");
+        // Generate questions with Gemini
+        console.log("🤖 Calling Gemini...");
         const { text: questions } = await generateText({
             model: google("gemini-2.0-flash-001"),
-            prompt: `Prepare questions for a job interview.
-        The job role is ${role}.
-        The job experience level is ${level}.
-        The tech stack used in the job is: ${techstack}.
-        The focus between behavioural and technical questions should lean towards: ${type}.
-        The amount of questions required is: ${amount}.
-        Please return only the questions, without any additional text.
-        The questions are going to be read by a voice assistant so do not use "/" or "*" or any other special characters which might break the voice assistant.
-        Return the questions formatted like this:
-        ["Question 1", "Question 2", "Question 3"]
-        
-        Thank you! ❤️
-    `,
+            prompt: `
+                Prepare questions for a job interview.
+                The job role is ${role}.
+                The job experience level is ${level}.
+                The tech stack used is: ${techstack}.
+                Focus on: ${type}.
+                Number of questions: ${amount}.
+                
+                Return ONLY a JSON array like:
+                ["Q1", "Q2", "Q3"]
+            `,
         });
 
-        console.log("✅ Questions generated:", questions);
+        console.log("📘 Raw generated questions:", questions);
 
-        // Save to Firebase
-        console.log("🔥 Saving to Firebase...");
         const interview = {
-            role: role,
-            type: type,
-            level: level,
-            techstack: techstack.split(","),
+            role,
+            type,
+            level,
+            techstack: techstack.split(",").map(s => s.trim()),
             questions: JSON.parse(questions),
             userId: userid,
             finalized: true,
@@ -67,28 +65,29 @@ export async function POST(request: Request) {
             createdAt: new Date().toISOString(),
         };
 
+        console.log("🔥 Saving to Firebase...");
         await db.collection("interviews").add(interview);
-        console.log("💾 Saved to Firebase successfully");
 
-        // Return Vapi-compatible response
+        console.log("💾 Saved!");
+
         return Response.json({
             success: true,
             result: `I've generated ${amount} interview questions for ${role} role and saved them to your interviews.`
-        }, { status: 200 });
+        });
 
-    } catch (error) {
-        console.error("❌ ERROR:", error);
+    } catch (error: any) {
+        console.error("❌ SERVER ERROR:", error);
+
         return Response.json({
             success: false,
-            error: error.message
+            error: error?.message ?? "Unknown error"
         }, { status: 500 });
     }
 }
 
 export async function GET() {
-    console.log("✅ GET endpoint called");
     return Response.json({
         success: true,
         data: "Thank you!"
-    }, { status: 200 });
+    });
 }
