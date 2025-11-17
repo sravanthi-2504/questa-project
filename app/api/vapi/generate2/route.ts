@@ -6,6 +6,24 @@ import { google } from "@ai-sdk/google";
 import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
 
+// ---------- JSON CLEANING FUNCTION ----------
+function extractJsonArray(text: string) {
+    // Remove all markdown code fences
+    const cleaned = text
+        .replace(/```json/gi, "")
+        .replace(/```/g, "")
+        .trim();
+
+    // Extract ONLY the JSON array
+    const match = cleaned.match(/\[[\s\S]*\]/);
+    if (!match) {
+        throw new Error("No JSON array found in AI output");
+    }
+
+    return JSON.parse(match[0]);
+}
+
+// ---------- POST HANDLER ----------
 export async function POST(request: Request) {
     console.log("🚀 VAPI POST ENDPOINT CALLED");
 
@@ -13,10 +31,6 @@ export async function POST(request: Request) {
         const body = await request.json();
         console.log("📦 Incoming Body:", JSON.stringify(body));
 
-        // ⭐ Accept NORMAL JSON format coming from:
-        // - your Workflow API Request node
-        // - curl
-        // - any external POST
         const {
             role = "software engineer",
             level = "mid-level",
@@ -35,29 +49,33 @@ export async function POST(request: Request) {
             type,
         });
 
-        // Generate questions with Gemini
+        // ---- CALL GEMINI ----
         console.log("🤖 Calling Gemini...");
         const { text: questions } = await generateText({
             model: google("gemini-2.0-flash-001"),
             prompt: `
-        Prepare questions for a job interview.
-        The job role is ${role}.
-        The job experience level is ${level}.
-        The tech stack used is: ${techstack}.
-        Focus on: ${type}.
-        Number of questions: ${amount}.
-        Return ONLY a JSON array like ["Q1", "Q2", "Q3"].
-      `,
+                Prepare questions for a job interview.
+                The job role is ${role}.
+                The job experience level is ${level}.
+                The tech stack used is: ${techstack}.
+                Focus on: ${type}.
+                Number of questions: ${amount}.
+                Return ONLY a JSON array like ["Q1", "Q2", "Q3"].
+            `,
         });
 
         console.log("📘 Raw Gemini Output:", questions);
 
+        // ---- CLEAN JSON ----
+        const parsedQuestions = extractJsonArray(questions);
+
+        // ---- SAVE TO FIREBASE ----
         const interview = {
             role,
             type,
             level,
-            techstack: techstack.split(",").map((s: string) => s.trim()),
-            questions: JSON.parse(questions),
+            techstack: techstack.split(",").map((s) => s.trim()),
+            questions: parsedQuestions,
             userId: userid,
             finalized: true,
             coverImage: getRandomInterviewCover(),
@@ -67,14 +85,14 @@ export async function POST(request: Request) {
         console.log("🔥 Saving to Firebase...");
         await db.collection("interviews").add(interview);
 
-        console.log("💾 Saved!");
-
         return Response.json({
             success: true,
             result: `Generated ${amount} interview questions for ${role}`,
         });
+
     } catch (err: any) {
         console.error("❌ SERVER ERROR:", err);
+
         return Response.json(
             {
                 success: false,
@@ -85,6 +103,7 @@ export async function POST(request: Request) {
     }
 }
 
+// ---------- GET HANDLER ----------
 export async function GET() {
     return Response.json({
         success: true,
