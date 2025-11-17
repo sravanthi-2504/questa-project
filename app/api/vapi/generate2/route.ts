@@ -99,8 +99,7 @@ export async function POST(request: Request) {
                     amount: sampleQuestions.length,
                     userId: userid,
                     generatedAt: new Date().toISOString(),
-                    // Note: Firebase saving disabled for deployment
-                    savedToDatabase: false
+                    note: "Firebase integration disabled for deployment"
                 }
             }
         };
