@@ -6,24 +6,15 @@ import { google } from "@ai-sdk/google";
 import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
 
-// ---------- JSON CLEANING FUNCTION ----------
-function extractJsonArray(text: string) {
-    // Remove all markdown code fences
-    const cleaned = text
-        .replace(/```json/gi, "")
-        .replace(/```/g, "")
-        .trim();
-
-    // Extract ONLY the JSON array
-    const match = cleaned.match(/\[[\s\S]*\]/);
+// Helper to extract valid JSON array from Gemini output
+function extractJsonArray(text: string): string {
+    const match = text.match(/\[[\s\S]*\]/);
     if (!match) {
-        throw new Error("No JSON array found in AI output");
+        throw new Error("No valid JSON array found in AI response.");
     }
-
-    return JSON.parse(match[0]);
+    return match[0];
 }
 
-// ---------- POST HANDLER ----------
 export async function POST(request: Request) {
     console.log("🚀 VAPI POST ENDPOINT CALLED");
 
@@ -31,6 +22,7 @@ export async function POST(request: Request) {
         const body = await request.json();
         console.log("📦 Incoming Body:", JSON.stringify(body));
 
+        // Extract parameters
         const {
             role = "software engineer",
             level = "mid-level",
@@ -49,53 +41,57 @@ export async function POST(request: Request) {
             type,
         });
 
-        // ---- CALL GEMINI ----
+        // Generate questions with Gemini
         console.log("🤖 Calling Gemini...");
         const { text: questions } = await generateText({
             model: google("gemini-2.0-flash-001"),
             prompt: `
                 Prepare questions for a job interview.
-                The job role is ${role}.
-                The job experience level is ${level}.
-                The tech stack used is: ${techstack}.
-                Focus on: ${type}.
-                Number of questions: ${amount}.
-                Return ONLY a JSON array like ["Q1", "Q2", "Q3"].
+                Role: ${role}
+                Level: ${level}
+                Tech stack: ${techstack}
+                Focus: ${type}
+                Count: ${amount}
+                Return ONLY a JSON array like ["Q1","Q2","Q3"]
             `,
         });
 
         console.log("📘 Raw Gemini Output:", questions);
 
-        // ---- CLEAN JSON ----
-        const parsedQuestions = extractJsonArray(questions);
+        // Extract and clean JSON array
+        const clean = extractJsonArray(questions);
+        console.log("🧼 Clean JSON:", clean);
 
-        // ---- SAVE TO FIREBASE ----
-        const interview = {
+        const parsedQuestions = JSON.parse(clean);
+
+        // Save to Firebase
+        console.log("🔥 Saving to Firebase...");
+        await db.collection("interviews").add({
             role,
             type,
             level,
-            techstack: techstack.split(",").map((s) => s.trim()),
+            techstack: techstack.split(",").map((s: string) => s.trim()),
             questions: parsedQuestions,
             userId: userid,
             finalized: true,
             coverImage: getRandomInterviewCover(),
             createdAt: new Date().toISOString(),
-        };
-
-        console.log("🔥 Saving to Firebase...");
-        await db.collection("interviews").add(interview);
-
-        return Response.json({
-            success: true,
-            result: `Generated ${amount} interview questions for ${role}`,
         });
 
+        console.log("💾 Saved!");
+
+        // VAPI REQUIRED FORMAT
+        return Response.json({
+            result: {
+                message: `Generated ${amount} interview questions for ${role}`,
+                questions: parsedQuestions
+            }
+        });
     } catch (err: any) {
         console.error("❌ SERVER ERROR:", err);
 
         return Response.json(
             {
-                success: false,
                 error: err?.message ?? "Unknown server error",
             },
             { status: 500 }
@@ -103,7 +99,6 @@ export async function POST(request: Request) {
     }
 }
 
-// ---------- GET HANDLER ----------
 export async function GET() {
     return Response.json({
         success: true,
