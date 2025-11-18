@@ -32,7 +32,11 @@ const Page = () => {
                 <div className="interviews-section">
                     {dummyInterviews.length > 0 ? (
                         dummyInterviews.map((interview) => (
-                            <InterviewCard {...interview} key={interview.id}/>
+                            <InterviewCard
+                                {...interview}
+                                interviewId={interview.id}
+                                key={interview.id}
+                            />
                         ))
                     ) : (
                         <p>You haven&apos;t taken any interviews yet</p>
