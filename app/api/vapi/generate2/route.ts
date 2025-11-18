@@ -8,12 +8,23 @@ import { getRandomInterviewCover } from "@/lib/utils";
 
 // Extract valid JSON array from Gemini output
 function extractJsonArray(text: string): string {
-    const match = text.match(/\[[\s\S]*\]/);
-    if (!match) {
-        throw new Error("No valid JSON array found in AI response.");
+    try {
+        const start = text.indexOf("[");
+        const end = text.lastIndexOf("]") + 1;
+
+        if (start === -1 || end === 0) {
+            throw new Error("No JSON array found.");
+        }
+
+        const json = text.slice(start, end);
+        JSON.parse(json); // Validate JSON
+
+        return json;
+    } catch {
+        throw new Error("AI output did not contain valid JSON.");
     }
-    return match[0];
 }
+
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -116,15 +127,22 @@ export async function POST(request: Request) {
     } catch (error: any) {
         console.error("❌ Server Error:", error);
         return new Response(
-            JSON.stringify({ error: error?.message || "Internal Server Error" }),
+            JSON.stringify({
+                result: {
+                    success: false,
+                    message: error?.message || "Failed to generate questions",
+                    questions: [],
+                },
+            }),
             {
-                status: 500,
+                status: 200, // <-- IMPORTANT: Vapi requires status 200 even for errors
                 headers: {
                     "Content-Type": "application/json",
                     ...corsHeaders,
                 },
             }
         );
+
     }
 }
 
