@@ -18,7 +18,7 @@ interface InterviewCardProps {
     role: string;
     type: string;
     techstack: string[];
-    createdAt: Date;
+    createdAt: string | Date;
     feedback?: Feedback;
 }
 
